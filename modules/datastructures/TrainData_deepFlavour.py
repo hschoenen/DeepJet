@@ -3,6 +3,7 @@ import numpy as np
 import uproot3 as u3
 import uproot as u
 import awkward as ak
+import pandas as pd
 #import sys
 
 GLOBAL_PREFIX = ""
