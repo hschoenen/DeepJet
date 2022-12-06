@@ -8,7 +8,6 @@ def apply_noise(sample, magn=1e-2,offset=[0], dev=torch.device("cpu"), restrict_
 
     seed = 0
     np.random.seed(seed)
-
     with torch.no_grad():
         if var_group == 'glob':
             noise = torch.Tensor(np.random.normal(offset,magn,(len(sample),vars_per_candidate[var_group]))).to(dev)

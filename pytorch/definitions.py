@@ -2,6 +2,7 @@ cands_per_variable = {
     'glob' : 1,
     'cpf' : 25,
     'npf' : 25,
+<<<<<<< HEAD
 #    'vtx' : 5,
     'vtx' : 4,
     #'pxl' : ,

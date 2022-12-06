@@ -30,6 +30,7 @@ from definitions import epsilons_per_feature, vars_per_candidate
 glob_vars = vars_per_candidate['glob']
 
 def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss):
+
     for b in range(nbatches):
         #should not happen unless files are broken (will give additional errors)
         #if dataloader.isEmpty():
@@ -43,10 +44,8 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
         vtx = torch.Tensor(features_list[3]).to(device)
         #pxl = torch.Tensor(features_list[4]).to(device)
         y = torch.Tensor(truth_list[0]).to(device)
-        
         glob[:,:] = torch.where(glob[:,:] == -999., torch.zeros(len(glob),glob_vars).to(device), glob[:,:])
         glob[:,:] = torch.where(glob[:,:] ==   -1., torch.zeros(len(glob),glob_vars).to(device), glob[:,:])
-        
         # apply attack
         #print('Attack type:',attack)
         if attack == 'Noise':
@@ -86,6 +85,7 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
                                                thiscriterion=loss_fn,
                                                restrict_impact=restrict_impact,
                                                epsilon_factors=epsilon_factors)   
+
         # Compute prediction and loss
         pred = model(glob,cpf,npf,vtx)
         loss = loss_fn(pred, y.type_as(pred))
@@ -279,10 +279,6 @@ class training_base(object):
     def trainModel(self, nepochs, batchsize, batchsize_use_sum_of_squares = False, extend_truth_list_by=0,
                    load_in_mem = False, max_files = -1, plot_batch_loss = False, attack = None, att_magnitude = 0., restrict_impact = -1, **trainargs):
         
-        
-        #print('Attack:',attack)
-        #print('att_magnitude:',att_magnitude)
-        #print('restrict_impact:',restrict_impact)
         self._initTraining(batchsize, batchsize_use_sum_of_squares)
         print('starting training')
         if load_in_mem:
@@ -347,6 +343,7 @@ class training_base(object):
                     for param_group in self.optimizer.param_groups:
                         print('/n Learning rate = '+str(param_group['lr'])+' /n')
                     train_loss = train_loop(train_generator, nbatches_train, self.model, self.criterion, self.optimizer, self.device, self.trainedepoches, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss=0)
+
                     self.scheduler.step()
                 
                     self.model.eval()
