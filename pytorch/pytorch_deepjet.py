@@ -45,7 +45,6 @@ class InputProcess(nn.Module):
         self.cpf_conv4 = InputConv(32,8)
         
         
-<<<<<<< HEAD
         self.npf_bn = torch.nn.BatchNorm1d(8, eps = 0.001, momentum = 0.6)
         self.npf_conv1 = InputConv(8,32)
 #        self.npf_bn = torch.nn.BatchNorm1d(6, eps = 0.001, momentum = 0.6)

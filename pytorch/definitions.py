@@ -2,7 +2,6 @@ cands_per_variable = {
     'glob' : 1,
     'cpf' : 25,
     'npf' : 25,
-<<<<<<< HEAD
 #    'vtx' : 5,
     'vtx' : 4,
     #'pxl' : ,
@@ -23,19 +22,11 @@ defaults_per_variable_before_prepro = {
     'vtx' : [0 for i in range(vars_per_candidate['vtx'])],
     #'pxl' : ,
 }
-#epsilons_per_feature = {
-#    'glob' : '/eos/user/a/anstein/public/DeepJet/Train_DF_Run2/auxiliary/global_epsilons.npy',
-#    'cpf' : '/eos/user/a/anstein/public/DeepJet/Train_DF_Run2/auxiliary/cpf_epsilons.npy',
-#    'npf' : '/eos/user/a/anstein/public/DeepJet/Train_DF_Run2/auxiliary/npf_epsilons.npy',
-#    'vtx' : '/eos/user/a/anstein/public/DeepJet/Train_DF_Run2/auxiliary/vtx_epsilons.npy',
-#    #'pxl' : ,
-#}
 epsilons_per_feature = {
     'glob' : '/afs/cern.ch/user/h/heschone/private/DeepJet/epsilons/global_epsilons.npy',
     'cpf' : '/afs/cern.ch/user/h/heschone/private/DeepJet/epsilons/cpf_epsilons.npy',
     'npf' : '/afs/cern.ch/user/h/heschone/private/DeepJet/epsilons/npf_epsilons.npy',
     'vtx' : '/afs/cern.ch/user/h/heschone/private/DeepJet/epsilons/vtx_epsilons.npy',
-    #'pxl' : ,
 }
 defaults_per_variable = {
     'glob' : [0 for i in range(vars_per_candidate['glob'])],

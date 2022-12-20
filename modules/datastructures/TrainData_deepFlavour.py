@@ -1022,7 +1022,7 @@ class TrainData_DF_Run2(TrainData):
         TrainData.__init__(self)
         self.description = "DeepJet training datastructure"        
         self.truth_branches = ['isB','isBB','isGBB','isLeptonicB','isLeptonicB_C','isC','isGCC','isCC','isUD','isS','isG']
-        self.undefTruth=['isUndefined']
+        self.undefTruth=['isUndefined', 'isPU']
         self.weightbranchX='jet_pt'
         self.weightbranchY='jet_eta'
         self.remove = True
@@ -1187,9 +1187,11 @@ class TrainData_DF_Run2(TrainData):
             fileTimeOut(filename, 120)
             events = u.open(filename)["deepntuplizer/tree"]
             for_remove = events.arrays(b, library = 'pd')
-            notremoves=weighterobjects['weigther'].createNotRemoveIndices(for_remove,use_uproot=True)
+            notremoves=weighterobjects['weigther'].createNotRemoveIndices(for_remove, use_uproot = True)
             undef=for_remove['isUndefined']
             notremoves-=undef
+            pu=for_remove['isPU']
+            notremoves-=pu
             print('took ', sw.getAndReset(), ' to create remove indices')
 
         if self.remove:

@@ -15,10 +15,17 @@ parser.add_argument("-attack", help="use adversarial attack (Noise|FGSM) or leav
 parser.add_argument("-att_magnitude", help="distort input features with adversarial attack, using specified magnitude of attack", default="-1")
 parser.add_argument("-restrict_impact", help="limit attack impact to this fraction of the input value (percent-cap on distortion)", default="-1")
 
+# epsilon by flavour
+parser.add_argument("-att_magnitude_flavour", help="distort input features with adversarial attack, using specified magnitude of attack for each flavour", nargs=3, type=float, default=[0,0,0])
+
 args = parser.parse_args()
 batchsize = int(args.b)
 attack = args.attack
-att_magnitude = float(args.att_magnitude)
+att_magnitude_flavour = args.att_magnitude_flavour
+if att_magnitude_flavour == [0,0,0]:
+    att_magnitude = float(args.att_magnitude)
+else:
+    att_magnitude = att_magnitude_flavour
 restrict_impact = float(args.restrict_impact)
 
 import imp
@@ -36,7 +43,7 @@ from pytorch_deepjet_run2 import DeepJet_Run2
 from pytorch_deepjet_transformer import DeepJetTransformer
 from torch.optim import Adam, SGD
 from tqdm import tqdm
-from attacks import apply_noise, fgsm_attack
+from attacks import apply_noise, fgsm_attack, fgsm_attack_flavour
 inputdatafiles=[]
 inputdir=None
 
@@ -102,6 +109,17 @@ def test_loop(dataloader, model, nbatches, pbar, attack = "", att_magnitude = -1
                                                thiscriterion=loss_fn,
                                                restrict_impact=restrict_impact,
                                                epsilon_factors=epsilon_factors)
+        
+        elif attack == 'FGSM_flavour':
+            #print('Do FGSM')
+            glob, cpf, npf, vtx = fgsm_attack_flavour(sample=(glob,cpf,npf,vtx), 
+                                                      epsilons=att_magnitude,
+                                                      dev=device,
+                                                      targets=y,
+                                                      thismodel=model,
+                                                      thiscriterion=loss_fn,
+                                                      restrict_impact=restrict_impact,
+                                                      epsilon_factors=epsilon_factors)
 
 
 

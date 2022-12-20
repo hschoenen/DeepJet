@@ -84,8 +84,17 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
                                                thismodel=model,
                                                thiscriterion=loss_fn,
                                                restrict_impact=restrict_impact,
-                                               epsilon_factors=epsilon_factors)   
-
+                                               epsilon_factors=epsilon_factors)
+            
+        elif attack == 'FGSM_flavour':
+            glob, cpf, npf, vtx = fgsm_attack_flavour(sample=(glob,cpf,npf,vtx), 
+                                                      epsilons=att_magnitude,
+                                                      dev=device,
+                                                      targets=y,
+                                                      thismodel=model,
+                                                      thiscriterion=loss_fn,
+                                                      restrict_impact=restrict_impact,
+                                                      epsilon_factors=epsilon_factors)
         # Compute prediction and loss
         pred = model(glob,cpf,npf,vtx)
         loss = loss_fn(pred, y.type_as(pred))
@@ -110,32 +119,32 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
 
 def val_loop(dataloader, nbatches, model, loss_fn, device, epoch):
     num_batches = nbatches
-    test_loss, correct = 0, 0
+    test_loss, correct, total = 0, 0, 0
  
     with torch.no_grad():
         for b in range(nbatches):
-        #should not happen unless files are broken (will give additional errors)
-            #if dataloader.isEmpty():
-             #   raise Exception("ran out of data") 
-            
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             features_list, truth_list = next(dataloader)
             glob = torch.Tensor(features_list[0]).to(device)
             cpf = torch.Tensor(features_list[1]).to(device)
             npf = torch.Tensor(features_list[2]).to(device)
             vtx = torch.Tensor(features_list[3]).to(device)
-            #pxl = torch.Tensor(features_list[4]).to(device)
-            y = torch.Tensor(truth_list[0]).to(device)    
+            #pair = torch.Tensor(features_list[7]).to(device)
+            y = torch.Tensor(truth_list[0]).to(device)
+            glob[:,:] = torch.where(glob[:,:] == -999., torch.zeros(len(glob),glob_vars).to(device), glob[:,:])
+            glob[:,:] = torch.where(glob[:,:] ==   -1., torch.zeros(len(glob),glob_vars).to(device), glob[:,:])
+            # Compute prediction and loss
+            pred = model(glob, cpf, npf, vtx)
             # Compute prediction and loss
             _, labels = y.max(dim=1)
-            pred = model(glob,cpf,npf,vtx)
-            
-            test_loss += loss_fn(pred, y.type_as(pred)).item()
+            total += cpf.shape[0]
+            test_loss += loss_fn(pred, y.type_as(pred)).item() #loss_fn(pred, y.long()).item() # batch loss, added for every batch
+            avg_loss = test_loss / (b + 1)
+            #print(test_loss,"   ",avg_loss)
             correct += (pred.argmax(1) == labels).type(torch.float).sum().item()
- 
-    test_loss /= num_batches
-    correct /= (num_batches * cpf[0].shape[0])
-    print(f"Test Error: \n Accuracy: {(100*correct):>0.6f}%, Avg loss: {test_loss:>6f} \n")
-    return test_loss
+    correct /= total # this is dividing by the total length of validation set, also works for the edge case of the last batch
+    print(f"Test Error: \n Accuracy: {(100*correct):>0.6f}%, Avg loss: {avg_loss:>6f} \n")
+    return avg_loss
 
 def cross_entropy_one_hot(input, target):
     _, labels = target.max(dim=1)
