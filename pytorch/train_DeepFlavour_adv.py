@@ -35,13 +35,15 @@ train.train_data.maxFilesOpen=1
 attack = None
 att_magnitude = 0.
 restrict_impact = -1
+
 attack = 'FGSM'
 att_magnitude = 0.01
 restrict_impact = -1
 '''
 attack = 'FGSM_flavour'
-att_magnitude = [0.006,0.008,0.01]
+att_magnitude = [0.01,0.009,0.01]
 restrict_impact = -1
+
 
 model,history = train.trainModel(nepochs=num_epochs+lr_epochs, 
                                  batchsize=4000,

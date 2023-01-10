@@ -43,7 +43,7 @@ from pytorch_deepjet_run2 import DeepJet_Run2
 from pytorch_deepjet_transformer import DeepJetTransformer
 from torch.optim import Adam, SGD
 from tqdm import tqdm
-from attacks import apply_noise, fgsm_attack, fgsm_attack_flavour
+from attacks import apply_noise, fgsm_attack, fgsm_attack_flavour, ngm_attack
 inputdatafiles=[]
 inputdir=None
 
@@ -121,7 +121,17 @@ def test_loop(dataloader, model, nbatches, pbar, attack = "", att_magnitude = -1
                                                       restrict_impact=restrict_impact,
                                                       epsilon_factors=epsilon_factors)
 
-
+        
+        elif attack == 'NGM':
+            #print('Do FGSM')
+            glob, cpf, npf, vtx = ngm_attack(sample=(glob,cpf,npf,vtx), 
+                                               epsilon=att_magnitude,
+                                               dev=device,
+                                               targets=y,
+                                               thismodel=model,
+                                               thiscriterion=loss_fn,
+                                               restrict_impact=restrict_impact,
+                                               epsilon_factors=epsilon_factors)
 
         # Compute prediction
         pred = nn.Softmax(dim=1)(model(glob,cpf,npf,vtx)).cpu().detach().numpy()
@@ -186,7 +196,7 @@ os.system('mkdir -p '+args.outputDir)
 
 for inputfile in inputdatafiles:
     
-    print('predicting ',inputdir+"/"+inputfile)
+    #print('predicting ',inputdir+"/"+inputfile)
     
     use_inputdir = inputdir
     if inputfile[0] == "/":
@@ -210,7 +220,7 @@ for inputfile in inputdatafiles:
     gen = TrainDataGenerator()
     if batchsize < 1:
         batchsize = dc.getBatchSize()
-    print('batch size',batchsize)
+    #print('batch size',batchsize)
     gen.setBatchSize(batchsize)
     gen.setSquaredElementsLimit(dc.batch_uses_sum_of_squares)
     gen.setSkipTooLargeBatches(False)

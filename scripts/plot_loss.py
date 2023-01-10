@@ -4,7 +4,7 @@ print("finish import")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-model_names = ['nominal','adversarial','adversarial_flavour']
+model_names = ['nominal']#,'adversarial','adversarial_flavour']
 tagger = 'DF_Run2' #'DF'
 dirz = {
     'nominal': f'/eos/user/h/heschone/DeepJet/Train_DF_Run2/nominal/',
