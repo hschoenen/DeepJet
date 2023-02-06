@@ -95,6 +95,16 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
                                                       thiscriterion=loss_fn,
                                                       restrict_impact=restrict_impact,
                                                       epsilon_factors=epsilon_factors)
+        elif attack == 'FGSM_domain':
+            glob, cpf, npf, vtx = fgsm_attack_domain(sample=(glob,cpf,npf,vtx), 
+                                                      epsilon=att_magnitude,
+                                                      dev=device,
+                                                      targets=y,
+                                                      thismodel=model,
+                                                      thiscriterion=loss_fn,
+                                                      restrict_impact=restrict_impact,
+                                                      epsilon_factors=epsilon_factors)
+        
         # Compute prediction and loss
         pred = model(glob,cpf,npf,vtx)
         loss = loss_fn(pred, y.type_as(pred))

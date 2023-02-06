@@ -4,12 +4,15 @@ print("finish import")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-model_names = ['nominal']#,'adversarial','adversarial_flavour']
+model_names = ['nominal','adversarial']#,'adversarial_flavour_006008010','adversarial_flavour_008009010']
+#,'adversarial_flavour_010009010','adversarial','adversarial_flavour']
 tagger = 'DF_Run2' #'DF'
 dirz = {
     'nominal': f'/eos/user/h/heschone/DeepJet/Train_DF_Run2/nominal/',
-    'adversarial': f'/eos/user/h/heschone/DeepJet/Train_DF_Run2/adversarial/',
-    'adversarial_flavour': f'/eos/user/h/heschone/DeepJet/Train_DF_Run2/adversarial_flavour/',
+    'adversarial': f'/eos/user/h/heschone/DeepJet/Train_DF_Run2/fgsm/',
+    'adversarial_flavour_006008010': f'/eos/user/h/heschone/DeepJet/Train_DF_Run2/adversarial_flavour_006008010/',
+    'adversarial_flavour_008009010': f'/eos/user/h/heschone/DeepJet/Train_DF_Run2/adversarial_flavour_008009010/',
+    'adversarial_flavour_010009010': f'/eos/user/h/heschone/DeepJet/Train_DF_Run2/adversarial_flavour_010009010/',
 }
 
 nominal_epochs = 39
@@ -19,7 +22,9 @@ adversarial_flavour_epochs = 62
 paths = {
     'nominal' : [dirz['nominal'] + f'checkpoint_epoch_{i}.pth' for i in range(1,nominal_epochs+1)],
     'adversarial' : [dirz['adversarial'] + f'checkpoint_epoch_{i}.pth' for i in range(1,adversarial_epochs+1)],
-    'adversarial_flavour' : [dirz['adversarial_flavour'] + f'checkpoint_epoch_{i}.pth' for i in range(1,adversarial_flavour_epochs+1)],
+    'adversarial_flavour_006008010' : [dirz['adversarial_flavour_006008010'] + f'checkpoint_epoch_{i}.pth' for i in range(1,adversarial_flavour_epochs+1)],
+    'adversarial_flavour_008009010' : [dirz['adversarial_flavour_008009010'] + f'checkpoint_epoch_{i}.pth' for i in range(1,adversarial_epochs+1)],
+    'adversarial_flavour_010009010' : [dirz['adversarial_flavour_010009010'] + f'checkpoint_epoch_{i}.pth' for i in range(1,adversarial_epochs+1)],
     }
 
 for model in model_names:

@@ -21,11 +21,16 @@ parser.add_argument("-att_magnitude_flavour", help="distort input features with 
 args = parser.parse_args()
 batchsize = int(args.b)
 attack = args.attack
-att_magnitude_flavour = args.att_magnitude_flavour
-if att_magnitude_flavour == [0,0,0]:
+
+if attack=="FGSM":
     att_magnitude = float(args.att_magnitude)
+elif attack=="FGSM_flavour":
+    att_magnitude = args.att_magnitude_flavour
+elif attack=="FGSM_domain":
+    att_magnitude = args.att_magnitude
 else:
-    att_magnitude = att_magnitude_flavour
+    att_magnitude=0
+
 restrict_impact = float(args.restrict_impact)
 
 import imp
@@ -43,7 +48,7 @@ from pytorch_deepjet_run2 import DeepJet_Run2
 from pytorch_deepjet_transformer import DeepJetTransformer
 from torch.optim import Adam, SGD
 from tqdm import tqdm
-from attacks import apply_noise, fgsm_attack, fgsm_attack_flavour, ngm_attack
+from attacks import apply_noise, fgsm_attack, fgsm_attack_flavour, fgsm_attack_domain, ngm_attack
 inputdatafiles=[]
 inputdir=None
 
@@ -120,8 +125,18 @@ def test_loop(dataloader, model, nbatches, pbar, attack = "", att_magnitude = -1
                                                       thiscriterion=loss_fn,
                                                       restrict_impact=restrict_impact,
                                                       epsilon_factors=epsilon_factors)
+            
+        elif attack == 'FGSM_domain':
+            #print('Do FGSM')
+            glob, cpf, npf, vtx = fgsm_attack_domain(sample=(glob,cpf,npf,vtx), 
+                                                      epsilon=att_magnitude,
+                                                      dev=device,
+                                                      targets=y,
+                                                      thismodel=model,
+                                                      thiscriterion=loss_fn,
+                                                      restrict_impact=restrict_impact,
+                                                      epsilon_factors=epsilon_factors)
 
-        
         elif attack == 'NGM':
             #print('Do FGSM')
             glob, cpf, npf, vtx = ngm_attack(sample=(glob,cpf,npf,vtx), 

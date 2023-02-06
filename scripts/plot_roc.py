@@ -15,8 +15,8 @@ import uproot as u
 print("finish import")
 
 
-model_names = ['nominal','adversarial','adversarial_flavour_006008010','adversarial_flavour_008009010','adversarial_flavour_010009010']
-prediction_setups = ['','_FGSM']#,'_FGSM_flavour','_FGSM_flavour01']
+model_names = ['fgsm']#,'nominal','fgsm_flavour_006008010','fgsm_flavour_008009010','fgsm_flavour_010009010']
+prediction_setups = ['','_FGSM','_FGSM_flavour_012008010','_FGSM_domain_random']#'_FGSM_domain_default']
 prediction_files = 'outfiles'
 
 
