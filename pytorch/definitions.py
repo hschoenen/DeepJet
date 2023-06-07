@@ -23,10 +23,10 @@ defaults_per_variable_before_prepro = {
     #'pxl' : ,
 }
 epsilons_per_feature = {
-    'glob' : '/afs/cern.ch/user/h/heschone/private/DeepJet/epsilons/global_epsilons.npy',
-    'cpf' : '/afs/cern.ch/user/h/heschone/private/DeepJet/epsilons/cpf_epsilons.npy',
-    'npf' : '/afs/cern.ch/user/h/heschone/private/DeepJet/epsilons/npf_epsilons.npy',
-    'vtx' : '/afs/cern.ch/user/h/heschone/private/DeepJet/epsilons/vtx_epsilons.npy',
+    'glob' : '/home/home1/institut_3a/hschoenen/repositories/DeepJet/epsilons/global_epsilons.npy',
+    'cpf' : '/home/home1/institut_3a/hschoenen/repositories/DeepJet/epsilons/cpf_epsilons.npy',
+    'npf' : '/home/home1/institut_3a/hschoenen/repositories/DeepJet/epsilons/npf_epsilons.npy',
+    'vtx' : '/home/home1/institut_3a/hschoenen/repositories/DeepJet/epsilons/vtx_epsilons.npy',
 }
 defaults_per_variable = {
     'glob' : [0 for i in range(vars_per_candidate['glob'])],

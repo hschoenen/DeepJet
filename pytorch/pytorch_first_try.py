@@ -2,15 +2,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-
-## to call it from cammand lines
 import sys
 import os
 from argparse import ArgumentParser
 import shutil
 from DeepJetCore.DataCollection import DataCollection
-#from DeepJetCore.dataPipeline import TrainDataGenerator
-#from DeepJetCore.compiledc_trainDataGenerator import trainDataGenerator
 from DeepJetCore.DJCLosses import *
 from DeepJetCore.DJCLayers import *
 from pdb import set_trace
@@ -28,28 +24,26 @@ from attacks import *
 from definitions import epsilons_per_feature, vars_per_candidate
 
 glob_vars = vars_per_candidate['glob']
+global model_output_directory = "/net/scratch_cms3a/hschoenen/deepjet/results/"
 
-def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss):
 
+def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss, save_batch_progress=[], valgen=None):
+    train_losses_list = []
+    val_losses_list = []
+    # loop over the batches
     for b in range(nbatches):
-        #should not happen unless files are broken (will give additional errors)
-        #if dataloader.isEmpty():
-         #   raise Exception("ran out of data") 
-            
         features_list, truth_list = next(dataloader)
-
         glob = torch.Tensor(features_list[0]).to(device)
         cpf = torch.Tensor(features_list[1]).to(device)
         npf = torch.Tensor(features_list[2]).to(device)
         vtx = torch.Tensor(features_list[3]).to(device)
-        #pxl = torch.Tensor(features_list[4]).to(device)
         y = torch.Tensor(truth_list[0]).to(device)
+        # set global default values to zero
         glob[:,:] = torch.where(glob[:,:] == -999., torch.zeros(len(glob),glob_vars).to(device), glob[:,:])
         glob[:,:] = torch.where(glob[:,:] ==   -1., torch.zeros(len(glob),glob_vars).to(device), glob[:,:])
+        
         # apply attack
-        #print('Attack type:',attack)
         if attack == 'Noise':
-            #print('Do Noise')
             glob = apply_noise(glob, 
                                magn=att_magnitude,
                                offset=[0],
@@ -74,9 +68,7 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
                                dev=device,
                                restrict_impact=restrict_impact,
                                var_group='vtx')
-
         elif attack == 'FGSM':
-            #print('Do FGSM')
             glob, cpf, npf, vtx = fgsm_attack(sample=(glob,cpf,npf,vtx), 
                                                epsilon=att_magnitude,
                                                dev=device,
@@ -84,8 +76,7 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
                                                thismodel=model,
                                                thiscriterion=loss_fn,
                                                restrict_impact=restrict_impact,
-                                               epsilon_factors=epsilon_factors)
-            
+                                               epsilon_factors=epsilon_factors)    
         elif attack == 'FGSM_flavour':
             glob, cpf, npf, vtx = fgsm_attack_flavour(sample=(glob,cpf,npf,vtx), 
                                                       epsilons=att_magnitude,
@@ -105,53 +96,83 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
                                                       restrict_impact=restrict_impact,
                                                       epsilon_factors=epsilon_factors)
         
+        # save initialized model including loss values
+        if epoch==0:
+            if b==0 and b in save_batch_progress:
+                model.eval()
+                pred = model(glob,cpf,npf,vtx)
+                train_loss = loss_fn(pred, y.type_as(pred))
+                valgen.prepareNextEpoch()
+                nbatches_val = valgen.getNBatches()
+                val_generator = valgen.feedNumpyData()
+                val_loss = val_loop(val_generator, nbatches_val, model, loss_fn, device, epoch)
+                val_losses_list.append(val_loss)
+                checkpoint = {'state_dict': model.state_dict(),'optimizer' :optimizer.state_dict(),'epoch': epoch,'scheduler': scheduler.state_dict(),'best_loss': None,'train_loss': train_loss,'val_loss': val_loss}
+                torch.save(checkpoint, model_output_directory+'checkpoint_epoch_1_batch_0.pth')
+                model.train()
+                
         # Compute prediction and loss
         pred = model(glob,cpf,npf,vtx)
         loss = loss_fn(pred, y.type_as(pred))
- 
         # Backpropagation
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        
-        # Add loss to accumulated loss
-        acc_loss += loss.item() # AS [19.05.22]: only the value of the loss function, don't need whole computational graph
- 
-        # Update progress bar description
+        # Add loss to accumulated loss and calculate average batch loss
+        acc_loss += loss.item()
         avg_loss = acc_loss / (b + 1)
-        #if((b % 100) == 0):
-        #    print(f"Training Error: \n batch : {(b):>0.1f} / {(nbatches):>0.1f}, Avg loss: {avg_loss:>6f} \n")
+        # Update progress bar description
         desc = f'Epoch {epoch+1} - loss {avg_loss:.6f}'
         epoch_pbar.set_description(desc)
         epoch_pbar.update(1)
         
+        # optional: save progress at the batches specified in save_batch_progress
+        if epoch==0:
+            train_losses_list.append(loss.item)
+            if b+1 in save_batch_progress:
+                model.eval()
+                valgen.prepareNextEpoch()
+                nbatches_val = valgen.getNBatches()
+                val_generator = valgen.feedNumpyData()
+                val_loss = val_loop(val_generator, nbatches_val, model, loss_fn, device, epoch)
+                val_losses_list.append(val_loss)
+                checkpoint = {'state_dict': model.state_dict(),'optimizer' :optimizer.state_dict(),'epoch': epoch,'scheduler': scheduler.state_dict(),'best_loss': None,'train_loss': avg_loss,'val_loss': val_loss}
+                torch.save(checkpoint, model_output_directory+'checkpoint_epoch_'+str(epoch+1)+'_batch_'+str(b+1)+'.pth')
+                model.train()
+            else:
+                val_losses_list.append(0)
+    if epoch==1:
+        os.system('mkdir '+model_output_directory+'loss_values')
+        np.save('{}loss_values/batch_training_losses.npy'.format(model_output_directory),np.array(train_losses_list))
+        np.save('{}loss_values/batch_validation_losses.npy'.format(model_output_directory),np.array(val_losses_list))
     return avg_loss
+
 
 def val_loop(dataloader, nbatches, model, loss_fn, device, epoch):
     num_batches = nbatches
     test_loss, correct, total = 0, 0, 0
- 
     with torch.no_grad():
+        # loop over batches
         for b in range(nbatches):
             device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             features_list, truth_list = next(dataloader)
             glob = torch.Tensor(features_list[0]).to(device)
             cpf = torch.Tensor(features_list[1]).to(device)
             npf = torch.Tensor(features_list[2]).to(device)
-            vtx = torch.Tensor(features_list[3]).to(device)
-            #pair = torch.Tensor(features_list[7]).to(device)
+            vtx = torch.Tensor(features_list[3]).to(device
             y = torch.Tensor(truth_list[0]).to(device)
+            # set global defaults to zero
             glob[:,:] = torch.where(glob[:,:] == -999., torch.zeros(len(glob),glob_vars).to(device), glob[:,:])
             glob[:,:] = torch.where(glob[:,:] ==   -1., torch.zeros(len(glob),glob_vars).to(device), glob[:,:])
-            # Compute prediction and loss
+            # compute prediction and loss
             pred = model(glob, cpf, npf, vtx)
-            # Compute prediction and loss
+            test_loss += loss_fn(pred, y.type_as(pred)).item()
+            avg_loss = test_loss / (b + 1)
+            # compute number of correct predictions
             _, labels = y.max(dim=1)
             total += cpf.shape[0]
-            test_loss += loss_fn(pred, y.type_as(pred)).item() #loss_fn(pred, y.long()).item() # batch loss, added for every batch
-            avg_loss = test_loss / (b + 1)
-            #print(test_loss,"   ",avg_loss)
             correct += (pred.argmax(1) == labels).type(torch.float).sum().item()
+    # compute accuracy
     correct /= total # this is dividing by the total length of validation set, also works for the edge case of the last batch
     print(f"Test Error: \n Accuracy: {(100*correct):>0.6f}%, Avg loss: {avg_loss:>6f} \n")
     return avg_loss
@@ -169,15 +190,12 @@ class training_base(object):
         
         import sys
         scriptname=sys.argv[0]
-        
         parser = ArgumentParser('Run the training')
         parser.add_argument('inputDataCollection')
         parser.add_argument('outputDir')
         parser.add_argument("--submitbatch",  help="submits the job to condor" , default=False, action="store_true")
         parser.add_argument("--walltime",  help="sets the wall time for the batch job, format: 1d5h or 2d or 3h etc" , default='1d')
         parser.add_argument("--isbatchrun",   help="is batch run", default=False, action="store_true")
-
-
         args = parser.parse_args()
     
         self.inputData = os.path.abspath(args.inputDataCollection)
@@ -189,6 +207,8 @@ class training_base(object):
         self.trainedepoches = 0
         self.best_loss = np.inf
         self.checkpoint = 0
+
+        model_output_directory = self.outputDir
     
         isNewTraining=True
         if os.path.isdir(self.outputDir):
@@ -226,51 +246,25 @@ class training_base(object):
 
         self.val_data = self.train_data.split(splittrainandtest)
         
-        #shapes = self.train_data.getNumpyFeatureShapes()
-        #inputdtypes = self.train_data.getNumpyFeatureDTypes()
-        #inputnames= self.train_data.getNumpyFeatureArrayNames()
-        #for i in range(len(inputnames)): #in case they are not named
-         #   if inputnames[i]=="" or inputnames[i]=="_rowsplits":
-          #      inputnames[i]="input_"+str(i)+inputnames[i]
-            
-        #print("shapes", shapes)
-        #print("inputdtypes", inputdtypes)
-        #print("inputnames", inputnames)
-        
-        #self.torch_inputsshapes=[]
-        #counter=0
-        #for s,dt,n in zip(shapes,inputdtypes,inputnames):
-        #    self.torch_inputsshapes.append(s)
             
         if not isNewTraining:
             if os.path.isfile(self.outputDir+'/checkpoint.pth'):
                 kfile = self.outputDir+'/checkpoint.pth' 
             if os.path.isfile(kfile):
                 print(kfile)
-
                 self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-                
                 self.checkpoint = torch.load(kfile)
                 self.trainedepoches = self.checkpoint['epoch']
                 self.best_loss = self.checkpoint['best_loss']
-                
                 self.model.load_state_dict(self.checkpoint['state_dict'])
                 self.model.to(self.device)
                 self.optimizer.load_state_dict(self.checkpoint['optimizer'])
-                #self.optimizer.to(self.device)
                 self.scheduler.load_state_dict(self.checkpoint['scheduler'])
-            
             else:
                 print('no model found in existing output dir, starting training from scratch')
-
-    #def __del__(self):
-     #   if hasattr(self, 'train_data'):
-      #      del self.train_data
-       #     del self.val_data
             
     def saveModel(self,model, optimizer, epoch, scheduler, best_loss, train_loss, val_loss, is_best = False):
         checkpoint = {'state_dict': model.state_dict(),'optimizer' :optimizer.state_dict(),'epoch': epoch,'scheduler': scheduler.state_dict(),'best_loss': best_loss,'train_loss': train_loss,'val_loss': val_loss}
-        # AS [19.05.22]: want to save both losses (train/val) to plot curves later and compare between trainings (exclude overfitting!)
         if is_best:
             torch.save(checkpoint, self.outputDir+'checkpoint_best_loss.pth')
         else:
@@ -278,26 +272,17 @@ class training_base(object):
         torch.save(checkpoint, self.outputDir+'checkpoint_epoch_'+str(epoch)+'.pth')
         
     def _initTraining(self, batchsize, use_sum_of_squares=False):
-        
-        #if self.submitbatch:
-         #   from DeepJetCore.training.batchTools import submit_batch
-          #  submit_batch(self, self.args.walltime)
-           # exit() #don't delete this!
-        
         self.train_data.setBatchSize(batchsize)
         self.val_data.setBatchSize(batchsize)
         self.train_data.batch_uses_sum_of_squares=use_sum_of_squares
         self.val_data.batch_uses_sum_of_squares=use_sum_of_squares
-        
         self.train_data.writeToFile(self.outputDir+'trainsamples.djcdc')
-        self.val_data.writeToFile(self.outputDir+'valsamples.djcdc')
-                
+        self.val_data.writeToFile(self.outputDir+'valsamples.djcdc')   
         self.train_data.setBatchSize(batchsize)
         self.val_data.setBatchSize(batchsize)
         
     def trainModel(self, nepochs, batchsize, batchsize_use_sum_of_squares = False, extend_truth_list_by=0,
                    load_in_mem = False, max_files = -1, plot_batch_loss = False, attack = None, att_magnitude = 0., restrict_impact = -1, **trainargs):
-        
         self._initTraining(batchsize, batchsize_use_sum_of_squares)
         print('starting training')
         if load_in_mem:
@@ -314,37 +299,27 @@ class training_base(object):
                                  use_multiprocessing=False,
                                  workers=0,    
                                  **trainargs)
-            
         else:
             #prepare generator 
             print("setting up generator... can take a while")
             traingen = self.train_data.invokeGenerator()
             valgen = self.val_data.invokeGenerator()
-            #this is fixed
             traingen.setBatchSize(batchsize)
             valgen.setBatchSize(batchsize)
-            #traingen.extend_truth_list_by = extend_truth_list_by
-            #valgen.extend_truth_list_by = extend_truth_list_by
-            
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             self.model.to(self.device)
-            #self.optimizer.to(self.device)
-            
+            #load epsilon factors (specified paths in definitions.py)
             epsilon_factors = {
                 'glob' : torch.Tensor(np.load(epsilons_per_feature['glob']).transpose()).to(self.device),
                 'cpf' : torch.Tensor(np.load(epsilons_per_feature['cpf']).transpose()).to(self.device),
                 'npf' : torch.Tensor(np.load(epsilons_per_feature['npf']).transpose()).to(self.device),
                 'vtx' : torch.Tensor(np.load(epsilons_per_feature['vtx']).transpose()).to(self.device),
             }
-            
+            # loop over epochs
             while(self.trainedepoches < nepochs):
-           
-                #this can change from epoch to epoch
-                #calculate steps for this epoch
-                #feed info below
                 traingen.prepareNextEpoch()
                 valgen.prepareNextEpoch()
-
+                # get number of training and validation batches
                 nbatches_train = traingen.getNBatches() #might have changed due to shuffeling
                 nbatches_val = valgen.getNBatches()
                 
@@ -357,25 +332,20 @@ class training_base(object):
                 
                 with tqdm(total = nbatches_train) as epoch_pbar:
                     epoch_pbar.set_description(f'Epoch {self.trainedepoches + 1}')
-
                     self.model.train()
                     for param_group in self.optimizer.param_groups:
                         print('/n Learning rate = '+str(param_group['lr'])+' /n')
-                    train_loss = train_loop(train_generator, nbatches_train, self.model, self.criterion, self.optimizer, self.device, self.trainedepoches, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss=0)
-
+                    # compute training loss and perform gradient descent
+                    train_loss = train_loop(train_generator, nbatches_train, self.model, self.criterion, self.optimizer, self.device, self.trainedepoches, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss=0, save_batch_progress=[1,2,3,4,5,10,20,50,100,200,500,1000,2000,5000], valgen=valgen)
                     self.scheduler.step()
-                
                     self.model.eval()
+                    # compute validation loss and accuracy
                     val_loss = val_loop(val_generator, nbatches_val, self.model, self.criterion, self.device, self.trainedepoches)
-
                     self.trainedepoches += 1
-                    
+                    # save model with the best validation loss as checkpoint_best_loss.pth
                     if(val_loss < self.best_loss):
                         self.best_loss = val_loss
                         self.saveModel(self.model, self.optimizer, self.trainedepoches, self.scheduler, self.best_loss, train_loss, val_loss, is_best = True)
-
-                    
+                    # save model as checkpoint_epoch_{}.pth
                     self.saveModel(self.model, self.optimizer, self.trainedepoches, self.scheduler, self.best_loss, train_loss, val_loss, is_best = False)
-                
-                #traingen.shuffleFilelist()
                 traingen.shuffleFileList()
