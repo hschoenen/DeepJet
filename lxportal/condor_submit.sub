@@ -1,0 +1,23 @@
+# This file can be used to submit execute_payload.sh as a condor job to lx3agpu1
+# condor_submit condor_submit.sub
+
+#Set the executable file
+executable = /home/home1/institut_3a/hschoenen/repositories/DeepJet/lxportal/condor_start_deepjet.sh
+
+#Set the standard output, error and log files
+output = job_$(ProcId).out
+error = job_$(ProcId).err
+log = job_$(ProcId).log
+
+# Specify the requested resources
+request_GPUMemory = 8000
+#request_GPUs = 1
+
+# Set the inital directory where the job will run
+initialdir = /net/scratch_cms3a/hschoenen/deepjet/logs
+
+# Specify any required software
+requirements = (OpSys == "LINUX") && (Arch == "X86_64")
+
+#specify the queue
+queue

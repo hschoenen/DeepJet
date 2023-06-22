@@ -3,28 +3,29 @@
 
 import subprocess
 
-model_names=['fgsm']#,'fgsm_flavour_006008010','fgsm_flavour_008009010','fgsm_flavour_010009010','nominal']
-predictions=['nominal','fgsm','fgsm_flavour_012008010','fgsm_domain_random'] #'fgsm_flavour_default','fgsm_flavour_006008010','fgsm_flavour_008009010','fgsm_flavour_010009010','fgsm_domain_default','NGM''fgsm_domain_default',]
+model_names = ['fgsm-0_02']#'nominal','fgsm-0_01']
+predictions = ['nominal','fgsm-0_005','fgsm-0_01','fgsm-0_015','fgsm-0_02','fgsm--0_01']
+restrict_impact = 0.2
+checkpoint = 'checkpoint_best_loss.pth'
+model_dir = '/net/scratch_cms3a/hschoenen/deepjet/results/'
 
-checkpoint='checkpoint_best_loss.pth'
+
 prediction_commands={
-    'nominal': '/predict',
-    'fgsm': '/predict_FGSM -attack FGSM -att_magnitude 0.01 -restrict_impact 0.2',
-    'fgsm_flavour_default': '/predict_FGSM_flavour_default -attack FGSM_flavour -att_magnitude_flavour 0.01 0.01 0.01 -restrict_impact 0.2',
-    'fgsm_flavour_006008010': '/predict_FGSM_flavour_006008010 -attack FGSM_flavour -att_magnitude_flavour 0.006 0.008 0.01 -restrict_impact 0.2',
-    'fgsm_flavour_008009010': '/predict_FGSM_flavour_008009010 -attack FGSM_flavour -att_magnitude_flavour 0.008 0.009 0.01 -restrict_impact 0.2',
-    'fgsm_flavour_010009010': '/predict_FGSM_flavour_010009010 -attack FGSM_flavour -att_magnitude_flavour 0.01 0.009 0.01 -restrict_impact 0.2',
-    'fgsm_flavour_012008010': '/predict_FGSM_flavour_012008010 -attack FGSM_flavour -att_magnitude_flavour 0.012 0.008 0.01 -restrict_impact 0.2',
-    'fgsm_domain_default': '/predict_FGSM_domain_default -attack FGSM_domain -att_magnitude default -restrict_impact 0.2',
-    'fgsm_domain_random': '/predict_FGSM_domain_random -attack FGSM_domain -att_magnitude random -restrict_impact 0.2',
-    'NGM': '/predict_NGM -attack NGM -att_magnitude 0.01 -restrict_impact 0.2',
+    'nominal': '/predict_nominal',
+    'fgsm-0_005': '/predict_fgsm-0_005 -attack FGSM -att_magnitude 0.005',
+    'fgsm-0_01': '/predict_fgsm-0_01 -attack FGSM -att_magnitude 0.01',
+    'fgsm-0_015': '/predict_fgsm-0_015 -attack FGSM -att_magnitude 0.015',
+    'fgsm-0_02': '/predict_fgsm-0_02 -attack FGSM -att_magnitude 0.02',
+    'fgsm--0_01': '/predict_fgsm--0_01 -attack FGSM -att_magnitude -0.01',
+    'fgsm_flavour-0_01-0_01-0_01': '/predict_fgsm_flavour_default -attack FGSM_flavour -att_magnitude_flavour 0.01 0.01 0.01',
+    'fgsm_domain_default': '/predict_fgsm_domain_default -attack FGSM_domain -att_magnitude_domain default',
 }
 
 for model in model_names:
     for prediction in predictions:
-        command='python3 pytorch/predict_pytorch.py DeepJet_Run2 /eos/user/h/heschone/DeepJet/Train_DF_Run2/'+ model + '/' + checkpoint + ' /eos/user/h/heschone/DeepJet/Train_DF_Run2/' + model + '/trainsamples.djcdc one_sample.txt /eos/user/h/heschone/DeepJet/Train_DF_Run2/' + model + prediction_commands[prediction] 
-        #print(command)
+        command='python3 pytorch/predict_pytorch.py DeepJet_Run2 '+ model_dir+model+'/'+ checkpoint + ' ' + model_dir+ model+'/trainsamples.djcdc' + ' one_sample_lxportal.txt ' + model_dir+model+prediction_commands[prediction] + ' -restrict_impact '+str(restrict_impact)
         print(model+"    "+prediction)
+        print(command)
         p=subprocess.run(command.split(" "))
         
 # Alternative (with no QCD) to onesample.txt: /eos/cms/store/group/phys_btag/ParticleTransformer/ntuple_ttbar_had_test_samples/output/samples.txt
