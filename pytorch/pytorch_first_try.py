@@ -24,12 +24,12 @@ from attacks import *
 from definitions import epsilons_per_feature, vars_per_candidate
 
 glob_vars = vars_per_candidate['glob']
-global model_output_directory = "/net/scratch_cms3a/hschoenen/deepjet/results/"
+model_output_directory = "/net/scratch_cms3a/hschoenen/deepjet/results/"
 
 
-def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss, save_batch_progress=[], valgen=None):
-    train_losses_list = []
-    val_losses_list = []
+def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss, batchsize=4000, save_batch_progress=[], valgen=None, scheduler=None):
+    batch_train_losses = []
+    batch_val_losses = []
     # loop over the batches
     for b in range(nbatches):
         features_list, truth_list = next(dataloader)
@@ -97,18 +97,22 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
                                                       epsilon_factors=epsilon_factors)
         
         # save initialized model including loss values
-        if epoch==0:
-            if b==0 and b in save_batch_progress:
+        if epoch==0 and len(save_batch_progress)>0:
+            if b==0:
                 model.eval()
+                # compute training loss
                 pred = model(glob,cpf,npf,vtx)
-                train_loss = loss_fn(pred, y.type_as(pred))
+                train_loss = loss_fn(pred, y.type_as(pred)).item()
+                batch_train_losses.append(train_loss)
+                # compute validation loss
                 valgen.prepareNextEpoch()
                 nbatches_val = valgen.getNBatches()
                 val_generator = valgen.feedNumpyData()
-                val_loss = val_loop(val_generator, nbatches_val, model, loss_fn, device, epoch)
-                val_losses_list.append(val_loss)
+                val_loss = val_loop(val_generator, nbatches_val, model, loss_fn, device, epoch, batchsize=batchsize)
+                batch_val_losses.append(val_loss)
+                # save model parameters
                 checkpoint = {'state_dict': model.state_dict(),'optimizer' :optimizer.state_dict(),'epoch': epoch,'scheduler': scheduler.state_dict(),'best_loss': None,'train_loss': train_loss,'val_loss': val_loss}
-                torch.save(checkpoint, model_output_directory+'checkpoint_epoch_1_batch_0.pth')
+                torch.save(checkpoint, model_output_directory+'/checkpoint_epoch_1_batch_0.pth')
                 model.train()
                 
         # Compute prediction and loss
@@ -120,35 +124,36 @@ def train_loop(dataloader, nbatches, model, loss_fn, optimizer, device, epoch, e
         optimizer.step()
         # Add loss to accumulated loss and calculate average batch loss
         acc_loss += loss.item()
-        avg_loss = acc_loss / (b + 1)
+        avg_loss = acc_loss / (b + len(pred[:,0])/batchsize)
         # Update progress bar description
         desc = f'Epoch {epoch+1} - loss {avg_loss:.6f}'
         epoch_pbar.set_description(desc)
         epoch_pbar.update(1)
         
-        # optional: save progress at the batches specified in save_batch_progress
+        # optional: save progress at the batches specified in save_batch_progress=[]
         if epoch==0:
-            train_losses_list.append(loss.item)
+            batch_train_losses.append(loss.item())
             if b+1 in save_batch_progress:
                 model.eval()
+                # compute validation loss
                 valgen.prepareNextEpoch()
                 nbatches_val = valgen.getNBatches()
                 val_generator = valgen.feedNumpyData()
-                val_loss = val_loop(val_generator, nbatches_val, model, loss_fn, device, epoch)
-                val_losses_list.append(val_loss)
+                val_loss = val_loop(val_generator, nbatches_val, model, loss_fn, device, epoch, batchsize=batchsize)
+                batch_val_losses.append(val_loss)
+                # save model parameters
                 checkpoint = {'state_dict': model.state_dict(),'optimizer' :optimizer.state_dict(),'epoch': epoch,'scheduler': scheduler.state_dict(),'best_loss': None,'train_loss': avg_loss,'val_loss': val_loss}
-                torch.save(checkpoint, model_output_directory+'checkpoint_epoch_'+str(epoch+1)+'_batch_'+str(b+1)+'.pth')
+                torch.save(checkpoint, model_output_directory+'/checkpoint_epoch_'+str(epoch+1)+'_batch_'+str(b+1)+'.pth')
                 model.train()
             else:
-                val_losses_list.append(0)
-    if epoch==1:
-        os.system('mkdir '+model_output_directory+'loss_values')
-        np.save('{}loss_values/batch_training_losses.npy'.format(model_output_directory),np.array(train_losses_list))
-        np.save('{}loss_values/batch_validation_losses.npy'.format(model_output_directory),np.array(val_losses_list))
+                batch_val_losses.append(0)
+    if epoch==0:
+        np.save('{}/loss_values/batch_training_losses.npy'.format(model_output_directory),np.array(batch_train_losses))
+        np.save('{}/loss_values/batch_validation_losses.npy'.format(model_output_directory),np.array(batch_val_losses))
     return avg_loss
 
 
-def val_loop(dataloader, nbatches, model, loss_fn, device, epoch):
+def val_loop(dataloader, nbatches, model, loss_fn, device, epoch, batchsize=4000):
     num_batches = nbatches
     test_loss, correct, total = 0, 0, 0
     with torch.no_grad():
@@ -159,7 +164,7 @@ def val_loop(dataloader, nbatches, model, loss_fn, device, epoch):
             glob = torch.Tensor(features_list[0]).to(device)
             cpf = torch.Tensor(features_list[1]).to(device)
             npf = torch.Tensor(features_list[2]).to(device)
-            vtx = torch.Tensor(features_list[3]).to(device
+            vtx = torch.Tensor(features_list[3]).to(device)
             y = torch.Tensor(truth_list[0]).to(device)
             # set global defaults to zero
             glob[:,:] = torch.where(glob[:,:] == -999., torch.zeros(len(glob),glob_vars).to(device), glob[:,:])
@@ -167,7 +172,7 @@ def val_loop(dataloader, nbatches, model, loss_fn, device, epoch):
             # compute prediction and loss
             pred = model(glob, cpf, npf, vtx)
             test_loss += loss_fn(pred, y.type_as(pred)).item()
-            avg_loss = test_loss / (b + 1)
+            avg_loss = test_loss / (b + len(pred[:,0])/batchsize)
             # compute number of correct predictions
             _, labels = y.max(dim=1)
             total += cpf.shape[0]
@@ -183,23 +188,26 @@ def cross_entropy_one_hot(input, target):
 
 class training_base(object):
     
-    def __init__(self, model = None, criterion = cross_entropy_one_hot, optimizer = None,
-                scheduler = None, splittrainandtest=0.85, useweights=False, testrun=False,
-                testrun_fraction=0.1, resumeSilently=False, renewtokens=True,
-		 collection_class=DataCollection, parser=None, recreate_silently=False):
+    def __init__(self, model = None, criterion = cross_entropy_one_hot, optimizer = None, scheduler = None, splittrainandtest=0.85, useweights=False, parser=None, resume_silently=False, recreate_silently=False, evaluation_inputFile=''):
+
+        # build training base for training
+        if evaluation_inputFile=='':
+            import sys
+            scriptname = sys.argv[0]
+            parser = ArgumentParser('Run the training')
+            parser.add_argument('inputDataCollection')
+            parser.add_argument('outputDir')
+            parser.add_argument("--submitbatch",  help="submits the job to condor" , default=False, action="store_true")
+            parser.add_argument("--walltime",  help="sets the wall time for the batch job, format: 1d5h or 2d or 3h etc" , default='1d')
+            parser.add_argument("--isbatchrun",   help="is batch run", default=False, action="store_true")
+            args = parser.parse_args()
+            self.inputData = os.path.abspath(args.inputDataCollection)
+            self.outputDir = args.outputDir
+        # just build training base for model evaluation
+        else:
+            self.inputData = os.path.abspath(evaluation_inputFile)
+            self.outputDir = ''
         
-        import sys
-        scriptname=sys.argv[0]
-        parser = ArgumentParser('Run the training')
-        parser.add_argument('inputDataCollection')
-        parser.add_argument('outputDir')
-        parser.add_argument("--submitbatch",  help="submits the job to condor" , default=False, action="store_true")
-        parser.add_argument("--walltime",  help="sets the wall time for the batch job, format: 1d5h or 2d or 3h etc" , default='1d')
-        parser.add_argument("--isbatchrun",   help="is batch run", default=False, action="store_true")
-        args = parser.parse_args()
-    
-        self.inputData = os.path.abspath(args.inputDataCollection)
-        self.outputDir = args.outputDir
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -208,45 +216,58 @@ class training_base(object):
         self.best_loss = np.inf
         self.checkpoint = 0
 
+        self.epoch_train_losses = []
+        self.epoch_val_losses = []
+        
+        # make a global variable for the model output directory
+        global model_output_directory
         model_output_directory = self.outputDir
     
         isNewTraining=True
-        if os.path.isdir(self.outputDir):
-            if not (resumeSilently or recreate_silently):
-                var = input('output dir exists. To recover a training, please type "yes"\n')
-                if not var == 'yes':
-                    raise Exception('output directory must not exist yet')
-                isNewTraining=False
-                if recreate_silently:
-                    isNewTraining=True     
-        else:
-            os.mkdir(self.outputDir)
-        self.outputDir = os.path.abspath(self.outputDir)
-        self.outputDir+='/'
-        
-        if recreate_silently:
-            os.system('rm -rf '+ self.outputDir +'*')
-        
-        #copy configuration to output dir
-        if not args.isbatchrun:
-            try:
-                shutil.copyfile(scriptname,self.outputDir+os.path.basename(scriptname))
-            except shutil.SameFileError:
-                pass
-            except BaseException as e:
-                raise e
-                
-            self.copied_script = self.outputDir+os.path.basename(scriptname)
-        else:
-            self.copied_script = scriptname
-        
+        if self.outputDir!='':
+            if os.path.isdir(self.outputDir):
+                # ask user, if old training should be continued
+                if not (resume_silently or recreate_silently):
+                    var = input('output dir exists. To recover a training, please type "yes"\n')
+                    if not var == 'yes':
+                        raise Exception('output directory must not exist yet')
+                    isNewTraining=False
+                # continue old training automatically (no terminal interaction required)
+                if resume_silently:
+                    isNewTraining=False     
+            else:
+                # create output directory
+                if (resume_silently or recreate_silently):
+                    raise Exception('there is no old training, which can be continued or overwritten')
+                os.mkdir(self.outputDir)
+            self.outputDir = os.path.abspath(self.outputDir)
+            self.outputDir+='/'
+
+            # delete progress and start new training automatically (no terminal interaction required)
+            if recreate_silently:
+                isNewTraining=True
+                os.system('rm -rf '+ self.outputDir +'*')
+            
+            # copy configuration to output dir
+            if not args.isbatchrun:
+                try:
+                    shutil.copyfile(scriptname,self.outputDir+os.path.basename(scriptname))
+                except shutil.SameFileError:
+                    pass
+                except BaseException as e:
+                    raise e
+                self.copied_script = self.outputDir+os.path.basename(scriptname)
+            else:
+                self.copied_script = scriptname
+
+        # create training and validation datasets
         self.train_data = DataCollection()
         self.train_data.readFromFile(self.inputData)
-        self.train_data.useweights=useweights
-
-        self.val_data = self.train_data.split(splittrainandtest)
+        self.train_data.useweights = useweights
+        if splittrainandtest>0:
+            self.val_data = self.train_data.split(splittrainandtest)
         
-            
+        # load model checkpoint, if training should be continued
         if not isNewTraining:
             if os.path.isfile(self.outputDir+'/checkpoint.pth'):
                 kfile = self.outputDir+'/checkpoint.pth' 
@@ -260,6 +281,8 @@ class training_base(object):
                 self.model.to(self.device)
                 self.optimizer.load_state_dict(self.checkpoint['optimizer'])
                 self.scheduler.load_state_dict(self.checkpoint['scheduler'])
+                self.epoch_train_losses = np.load('{}/loss_values/epoch_training_losses.npy'.format(model_output_directory)).tolist()
+                self.epoch_val_losses = np.load('{}/loss_values/epoch_validation_losses.npy'.format(model_output_directory)).tolist()
             else:
                 print('no model found in existing output dir, starting training from scratch')
             
@@ -315,6 +338,10 @@ class training_base(object):
                 'npf' : torch.Tensor(np.load(epsilons_per_feature['npf']).transpose()).to(self.device),
                 'vtx' : torch.Tensor(np.load(epsilons_per_feature['vtx']).transpose()).to(self.device),
             }
+            # create loss_values directory
+            if not os.path.isdir(model_output_directory+'/loss_values'):
+                os.system('mkdir '+model_output_directory+'/loss_values')
+                
             # loop over epochs
             while(self.trainedepoches < nepochs):
                 traingen.prepareNextEpoch()
@@ -335,17 +362,35 @@ class training_base(object):
                     self.model.train()
                     for param_group in self.optimizer.param_groups:
                         print('/n Learning rate = '+str(param_group['lr'])+' /n')
+                        
                     # compute training loss and perform gradient descent
-                    train_loss = train_loop(train_generator, nbatches_train, self.model, self.criterion, self.optimizer, self.device, self.trainedepoches, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss=0, save_batch_progress=[1,2,3,4,5,10,20,50,100,200,500,1000,2000,5000], valgen=valgen)
+                    train_loss = train_loop(train_generator, nbatches_train, self.model, self.criterion, self.optimizer, self.device, self.trainedepoches, epoch_pbar, attack, att_magnitude, restrict_impact, epsilon_factors, acc_loss=0, batchsize=batchsize, save_batch_progress=[1,2,3,4,5,10,20,50,100,200,500,1000,2000,5000], valgen=valgen, scheduler=self.scheduler)
+                    self.epoch_train_losses.append(train_loss)
+                    np.save('{}/loss_values/epoch_training_losses.npy'.format(model_output_directory),np.array(self.epoch_train_losses))
                     self.scheduler.step()
-                    self.model.eval()
+                    
                     # compute validation loss and accuracy
-                    val_loss = val_loop(val_generator, nbatches_val, self.model, self.criterion, self.device, self.trainedepoches)
+                    self.model.eval()
+                    valgen.prepareNextEpoch()
+                    nbatches_val = valgen.getNBatches()
+                    val_generator = valgen.feedNumpyData()
+                    val_loss = val_loop(val_generator, nbatches_val, self.model, self.criterion, self.device, self.trainedepoches, batchsize=batchsize)
+                    self.epoch_val_losses.append(val_loss)
+                    np.save('{}/loss_values/epoch_validation_losses.npy'.format(model_output_directory),np.array(self.epoch_val_losses))
+                    
                     self.trainedepoches += 1
+                    
                     # save model with the best validation loss as checkpoint_best_loss.pth
                     if(val_loss < self.best_loss):
                         self.best_loss = val_loss
                         self.saveModel(self.model, self.optimizer, self.trainedepoches, self.scheduler, self.best_loss, train_loss, val_loss, is_best = True)
+                        best_epoch = self.trainedepoches
                     # save model as checkpoint_epoch_{}.pth
                     self.saveModel(self.model, self.optimizer, self.trainedepoches, self.scheduler, self.best_loss, train_loss, val_loss, is_best = False)
                 traingen.shuffleFileList()
+                
+            # save best epoch
+            self.epoch_train_losses.append(best_epoch)
+            self.epoch_val_losses.append(best_epoch)
+            np.save('{}/loss_values/epoch_training_losses.npy'.format(model_output_directory),np.array(self.epoch_train_losses))
+            np.save('{}/loss_values/epoch_validation_losses.npy'.format(model_output_directory),np.array(self.epoch_val_losses))

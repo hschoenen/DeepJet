@@ -1,96 +1,76 @@
-print("start import")
-import os
-import matplotlib
-matplotlib.use('Agg')
-from sklearn.metrics import roc_curve, roc_auc_score, auc
-from scipy.interpolate import InterpolatedUnivariateSpline
-from pdb import set_trace
-from itertools import chain
-import matplotlib.pyplot as plt
+# Hendrik Schönen
+# This script produces datapoints for BvsL, CvsB and CvsL ROC curves
+# It requires prediction files produced by pytorch/predict_pytorch.py
+
+from sklearn.metrics import roc_curve, auc
+import numpy.lib.recfunctions as rf
 import pandas as pd
 import numpy as np
-import numpy.lib.recfunctions as rf
-import ROOT
-import uproot as u
-print("finish import")
+import os
 
+print(f"This process has the PID {os.getpid()} .")
 
-model_names = ['fgsm']#,'nominal','fgsm_flavour_006008010','fgsm_flavour_008009010','fgsm_flavour_010009010']
-prediction_setups = ['','_FGSM','_FGSM_flavour_012008010','_FGSM_domain_random']#'_FGSM_domain_default']
-prediction_files = 'outfiles'
+models = ["fgsm-0_02"]#["nominal","fgsm-0_01"]
+attacks = ["nominal","fgsm-0_005","fgsm-0_01","fgsm-0_015","fgsm-0_02","fgsm--0_01"]
+predictions = []
+for model in models:
+    for attack in attacks:
+        prediction = model + "/predict_" + attack +"/"
+        predictions.append(prediction)
 
-
+# compute ROC curve for the discriminator values disc, the labels truth_array
 def spit_out_roc(disc,truth_array,selection_array):
-    #newx = np.logspace(-3.5, 0, 100)
-    tprs = pd.DataFrame()
-    truth = truth_array[selection_array]*1
-    disc = disc[selection_array]
-    tmp_fpr, tmp_tpr, _ = roc_curve(truth, disc)
-    coords = pd.DataFrame()
-    coords['fpr'] = tmp_fpr
-    coords['tpr'] = tmp_tpr
-    clean = coords.drop_duplicates(subset=['fpr'])
-    #spline = InterpolatedUnivariateSpline(clean.fpr, clean.tpr,k=1)
-    #tprs = spline(newx)
-    auc_ = auc(clean.fpr,clean.tpr)
-    print('AUC: ', str(auc_))
-    #return tprs, newx
-    return clean.tpr, clean.fpr, auc_
+        tprs                = pd.DataFrame()
+        truth               = truth_array[selection_array] * 1
+        disc                = disc[selection_array]
+        tmp_fpr, tmp_tpr, _ = roc_curve(truth, disc)
+        coords              = pd.DataFrame()
+        coords["fpr"]       = tmp_fpr
+        coords["tpr"]       = tmp_tpr
+        clean               = coords.drop_duplicates(subset=["fpr"])
+        auc_                = auc(clean.fpr, clean.tpr)
+        print("AUC: ", str(auc_))
+        print("\n")
+        return clean.tpr, clean.fpr, auc_ * np.ones(np.shape(clean.tpr))
 
+def save_roc(prediction_path):
+    base_dir         = "/net/scratch_cms3a/hschoenen/deepjet/results/"
+    output_dirs      = [base_dir + f"{i}" for i in prediction_path]
+    
+    listbranch = ["prob_isB", "prob_isBB", "prob_isLeptB", "prob_isC", "prob_isUDS", "prob_isG", "isB", "isBB", "isLeptB", "isC", "isUDS", "isG", "jet_pt", "jet_eta"]
 
-isDeepJet = True
-if isDeepJet:
-    listbranch = ['prob_isB', 'prob_isBB','prob_isLeptB', 'prob_isC','prob_isUDS','prob_isG','isB', 'isBB', 'isLeptB', 'isC','isUDS','isG','jet_pt', 'jet_eta']
-else:
-    listbranch = ['prob_isB', 'prob_isBB', 'prob_isC','prob_isUDSG','isB', 'isBB', 'isC','isUDSG','jet_pt', 'jet_eta']
+    for j,output in enumerate(output_dirs):
+        # load prediction file
+        nparray  = rf.structured_to_unstructured(np.array(np.load(output + "pred_ntuple_merged_342.npy")))
+        df       = np.core.records.fromarrays([nparray[:,k] for k in range(len(listbranch))], names=listbranch)
 
-for model_name in model_names:
-    for prediction_setup in prediction_setups:
-        dirz = f'/eos/user/h/heschone/DeepJet/Train_DF_Run2/{model_name}/predict{prediction_setup}/'
-        truthfile = open( dirz+prediction_files+'.txt','r')
-        print("opened text file")
-        for i,line in enumerate(truthfile):
-            if len(line) < 1: continue
-            file1name=str(dirz+line.split('\n')[0])
-            events = rf.structured_to_unstructured(np.array(np.load(file1name.strip('.root')+'.npy')))
-            nparray = events if i == 0 else np.concatenate((nparray, events))
+        # convert b,bb,lepb,c,uds,g in B,C,L
+        b_jets    = df["isB"]        + df["isBB"]      + df["isLeptB"]
+        c_jets    = df["isC"]
+        b_out     = df["prob_isB"]   + df["prob_isBB"] + df["prob_isLeptB"]
+        c_out     = df["prob_isC"]
+        light_out = df["prob_isUDS"] + df["prob_isG"]
+        
+        # compute discriminator values
+        bvsl = np.where((b_out + light_out)!=0, (b_out)/(b_out + light_out), -1)
+        cvsb = np.where((b_out + c_out)    !=0, (c_out)/(b_out + c_out), -1)
+        cvsl = np.where((light_out + c_out)!=0, (c_out)/(light_out + c_out), -1)
 
-        print("added files")
-        print(type(nparray))
-        print(len(nparray))
-        print(type(nparray[0]))
-        df = np.core.records.fromarrays([nparray[:,k] for k in range(len(listbranch))],names=listbranch)
-        print("converted to df")
-
-        if isDeepJet:
-            b_jets = df['isB']+df['isBB']+df['isLeptB']
-            c_jets = df['isC']
-            b_out = df['prob_isB']+df['prob_isBB']+df['prob_isLeptB']
-            c_out = df['prob_isC']
-            light_out = df['prob_isUDS']+df['prob_isG']
-            bvsl = np.where((b_out + light_out)!=0,
-                        (b_out)/(b_out + light_out),
-                        -1)
-            cvsb = np.where((b_out + c_out)!=0,
-                        (c_out)/(b_out + c_out),
-                        -1)
-            cvsl = np.where((light_out + c_out)!=0,
-                        (c_out)/(light_out + c_out),
-                        -1)
-            summed_truth = df['isB']+df['isBB']+df['isLeptB']+df['isC']+df['isUDS']+df['isG']
-            veto_b = (df['isB'] != 1) & (df['isBB'] != 1) & (df['isLeptB'] != 1) & ( df['jet_pt'] > 30) & (summed_truth != 0)
-            veto_c = (df['isC'] != 1) & ( df['jet_pt'] > 30) & (summed_truth != 0)
-            veto_udsg = (df['isUDS'] != 1) & (df['isG'] != 1) & ( df['jet_pt'] > 30) & (summed_truth != 0)
-        else:
-            b_jets = df['isB']+df['isBB']
-            b_disc = df['prob_isB']+df['prob_isBB']
-            summed_truth = df['isB']+df['isBB']+df['isC']+df['isUDSG']
-            veto_c = (df['isC'] != 1) & ( df['jet_pt'] > 30) & (summed_truth != 0)
-            veto_udsg = (df['isUDSG'] != 1) & ( df['jet_pt'] > 30) & (summed_truth != 0)
-
+        # apply selection (pT>30GeV) and sort jets by true flavor: veto_b=True for NON-b jets, veto_b=False for b jets
+        summed_truth = df["isB"] + df["isBB"] + df["isLeptB"] + df["isC"] + df["isUDS"] + df["isG"]
+        veto_b    = (df["isB"] != 1)   & (df["isBB"] != 1)    & (df["isLeptB"] != 1) & ( df["jet_pt"] > 30) & (summed_truth != 0)
+        veto_c    = (df["isC"] != 1)   & ( df["jet_pt"] > 30) & (summed_truth != 0)
+        veto_udsg = (df["isUDS"] != 1) & (df["isG"] != 1)     & ( df["jet_pt"] > 30) & (summed_truth != 0)
+        
+        # compute ROC curves
         x1, y1, auc1 = spit_out_roc(bvsl,b_jets,veto_c)
         x2, y2, auc2 = spit_out_roc(cvsb,c_jets,veto_udsg)
         x3, y3, auc3 = spit_out_roc(cvsl,c_jets,veto_b)
-        np.save(dirz + f'BvL_{prediction_files}_NEW.npy',np.array([x1,y1,auc1],dtype=object))
-        np.save(dirz + f'CvB_{prediction_files}_NEW.npy',np.array([x2,y2,auc2],dtype=object))
-        np.save(dirz + f'CvL_{prediction_files}_NEW.npy',np.array([x3,y3,auc3],dtype=object))
+
+        # save ROC curves
+        np.save(output + "BvL.npy", np.stack((x1, y1, auc1)))
+        np.save(output + "CvB.npy", np.stack((x2, y2, auc2)))
+        np.save(output + "CvL.npy", np.stack((x3, y3, auc3)))
+        
+save_roc(predictions)
+print(f"Finished process {os.getpid()} .")

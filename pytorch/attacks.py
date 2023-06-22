@@ -85,36 +85,6 @@ def fgsm_attack(epsilon=1e-2,sample=None,targets=None,thismodel=None,thiscriteri
         xadv_npf += epsilon * epsilon_factors['npf'] * dx_npf
         xadv_vtx += epsilon * epsilon_factors['vtx'] * dx_vtx
         
-        '''
-        # investigate zero gradient jets and check if it is due to defaultvalues
-        if (glob[:,0]==xadv_glob[:,0]).nonzero().size(dim=0)>0:
-            zeros = (glob[:,0]==xadv_glob[:,0]).nonzero()
-            for i in range(len(zeros)):
-                print('default values for index ',zeros[i][0])
-                sum_defaults_glob = 0
-                for j in range(vars_per_candidate['glob']):
-                    defaults_glob = glob[i,j].cpu() == defaults_per_variable['glob'][j]
-                    sum_defaults_glob = len(defaults_glob.nonzero())
-                print(sum_defaults_glob)
-                sum_defaults_cpf = np.zeros(cands_per_variable['cpf'])
-                for j in range(cands_per_variable['cpf']):
-                    for k in range(vars_per_candidate['cpf']):
-                        defaults_cpf = cpf[i,j,k].cpu() == defaults_per_variable['cpf'][k]
-                        sum_defaults_cpf[j] += len(defaults_cpf.nonzero())
-                print(sum_defaults_cpf)
-                sum_defaults_npf = np.zeros(cands_per_variable['npf'])
-                for j in range(cands_per_variable['npf']):
-                    for k in range(vars_per_candidate['npf']):
-                        defaults_npf = npf[i,j,k].cpu() == defaults_per_variable['npf'][k]
-                        sum_defaults_npf[j] += len(defaults_npf.nonzero())
-                print(sum_defaults_npf)
-                sum_defaults_vtx = np.zeros(cands_per_variable['vtx'])
-                for j in range(cands_per_variable['vtx']):
-                    for k in range(vars_per_candidate['vtx']):
-                        defaults_vtx = vtx[i,j,k].cpu() == defaults_per_variable['vtx'][k]
-                        sum_defaults_vtx[j] += len(defaults_vtx.nonzero())
-                print(sum_defaults_vtx)
-        '''
         if (glob[:,0]==xadv_glob[:,0]).nonzero().size(dim=0)>0 and allow_zeros==False:
             zeros = (glob[:,0]==xadv_glob[:,0]).nonzero()
             print("For index ",zeros[0].item())
