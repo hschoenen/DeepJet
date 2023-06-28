@@ -3,14 +3,16 @@
 
 #Set the executable file
 executable = /home/home1/institut_3a/hschoenen/repositories/DeepJet/lxportal/condor_start_deepjet.sh
+should_transfer_files = YES
 
 #Set the standard output, error and log files
-output = job_$(ProcId).out
-error = job_$(ProcId).err
-log = job_$(ProcId).log
+output = $(ClusterId)_$(ProcId).out
+error = $(ClusterId)_$(ProcId).err
+log = $(ClusterId)_$(ProcId).log
 
 # Specify the requested resources
-request_GPUMemory = 8000
+request_memory = 50000
+request_GPUMemory = 6000
 #request_GPUs = 1
 
 # Set the inital directory where the job will run

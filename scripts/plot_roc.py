@@ -10,8 +10,8 @@ import os
 
 print(f"This process has the PID {os.getpid()} .")
 
-models = ["fgsm-0_02"]#["nominal","fgsm-0_01"]
-attacks = ["nominal","fgsm-0_005","fgsm-0_01","fgsm-0_015","fgsm-0_02","fgsm--0_01"]
+models = ["nominal","fgsm-0_01"]#[]"fgsm-0_02"
+attacks = ["nominal","fgsm-0_01","fgsm-0_02","fgsm-0_05","fgsm-0_1"]#"fgsm-0_005",,"fgsm-0_015","fgsm-0_02","fgsm--0_01"
 predictions = []
 for model in models:
     for attack in attacks:
