@@ -3,8 +3,8 @@
 
 import subprocess
 
-model_names = ['nominal','fgsm-0_01']
-predictions = ['fgsm-0_1']#'nominal','fgsm-0_01','fgsm-0_02','fgsm-0_05',
+model_names = ['fgsm-0_05']#'nominal','fgsm-0_01', 
+predictions = ['nominal','fgsm-0_01','fgsm-0_02','fgsm-0_05','fgsm-0_1']#
 restrict_impact = 0.2
 checkpoint = 'checkpoint_best_loss.pth'
 model_dir = '/net/scratch_cms3a/hschoenen/deepjet/results/'

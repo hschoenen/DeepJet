@@ -5,25 +5,18 @@ echo "############################## END OF BASH LOG ###########################
 
 ### training
 export input_dir=/net/scratch_cms3a/hschoenen/deepjet/data/Data/dataCollection.djcdc
-export output_dir=/net/scratch_cms3a/hschoenen/deepjet/results/test
-export adv=
-python3 pytorch/train_DeepFlavour$adv.py $input_dir $output_dir
-
+export output_dir=/net/scratch_cms3a/hschoenen/deepjet/results/fgsm-0_05-updated_epsilons
+export adv=_fgsm
+python3 /home/home1/institut_3a/hschoenen/repositories/DeepJet/pytorch/train_DeepFlavour$adv.py $input_dir $output_dir
 
 ### prediction
-#export checkpoint_dir=/net/scratch_cms3a/hschoenen/deepjet/results/nominal/checkpoint_best_loss.pth
-#export traindata_dir=/net/scratch_cms3a/hschoenen/deepjet/results/nominal/trainsamples.djcdc
-#export sample_dir=one_sample_lxportal.txt
-#export output_dir=/net/scratch_cms3a/hschoenen/deepjet/results/nominal/predict
-#python3 pytorch/predict_pytorch.py DeepJet_Run2 $checkpoint_dir $traindata_dir $sample_dir $output_dir
+#python3 /home/home1/institut_3a/hschoenen/repositories/DeepJet/scripts/multiple_predictions.py
 
-# -attack PGD -att_magnitude 0.01 -restrict_impact 0.2 -pgd_loops 5
+### ROC curves
+#python3 /home/home1/institut_3a/hschoenen/repositories/DeepJet/scripts/plot_roc.py
 
-
-### evaluation
-#python3 scripts/plot_loss_lxportal.py
-#python3 scripts/plot_roc_lxportal.py
-
+### plot inputs
+#python3 pytorch/plot_inputs.py
 
 ### testing
 #echo; export; echo; nvidia-smi; echo; echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}"; nvcc --version
