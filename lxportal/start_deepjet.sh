@@ -9,5 +9,6 @@ echo "Using GPU ${gpu}."
 export CUDA_VISIBLE_DEVICES=${gpu}
 
 echo "A log will be saved here: /net/scratch_cms3a/hschoenen/deepjet/logs/output_$job_id.txt"
+echo "/net/scratch_cms3a/hschoenen/deepjet/logs/output_$job_id.txt" >> ~/repositories/DeepJet/lxportal/logfiles.txt
 
 apptainer exec --nv --bind=/home/home1/institut_3a/hschoenen/,/net /cvmfs/unpacked.cern.ch/registry.hub.docker.com/cernml4reco/deepjetcore3:latest /bin/bash /home/home1/institut_3a/hschoenen/repositories/DeepJet/lxportal/setup_container.sh &>> /net/scratch_cms3a/hschoenen/deepjet/logs/output_$job_id.txt &

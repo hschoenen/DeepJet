@@ -32,7 +32,7 @@ train=training_base(model = model, criterion = criterion, optimizer = optimizer,
 train.train_data.maxFilesOpen=1
 
 attack = 'FGSM'
-att_magnitude = 0.01
+att_magnitude = 0.15
 restrict_impact = 0.2
 
 model,history = train.trainModel(nepochs=num_epochs+lr_epochs, 
