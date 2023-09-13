@@ -12,7 +12,7 @@ variables = ['jet_pt', 'jet_eta', 'nCpfcand','nNpfcand', 'nsv','npv', 'TagVarCSV
              'sv_pt','sv_deltaR', 'sv_mass', 'sv_ntracks', 'sv_chi2', 'sv_normchi2', 'sv_dxy', 'sv_dxysig', 'sv_d3d', 'sv_d3dsig', 'sv_costhetasvpv', 'sv_enratio']
 
 # specify model
-model_name = 'nominal'
+model_name = 'seed_nominal'
 modelDir = '/net/scratch_cms3a/hschoenen/deepjet/results/' + model_name
 modelFile = 'checkpoint_best_loss.pth'
 # specify input file
@@ -121,10 +121,14 @@ def save_features(inputs, targets, outputs, attack=""):
         print('{}/variables/{}/{}.npy saved'.format(modelDir,attack,target_name))
     # save predictions
     prediction_names = ['prob_isB','prob_isBB','prob_isLeptonicB','prob_isC','prob_isUDS','prob_isG']
+    softmax_outputs = pred = nn.Softmax(dim=1)(outputs).cpu().detach().numpy()
     for i,prediction_name in enumerate(prediction_names):
         variable_values = outputs[:,i].cpu().clone().detach().numpy()
         np.save('{}/variables/{}/{}.npy'.format(modelDir,attack,prediction_name), variable_values)
         print('{}/variables/{}/{}.npy saved'.format(modelDir,attack,prediction_name))
+        variable_values = softmax_outputs[:,i]
+        np.save('{}/variables/{}/softmax_{}.npy'.format(modelDir,attack,prediction_name), variable_values)
+        print('{}/variables/{}/softmax_{}.npy saved'.format(modelDir,attack,prediction_name))
 
 def cross_entropy_one_hot(input, target):
     _, labels = target.max(dim=1)
@@ -147,13 +151,13 @@ traingen.prepareNextEpoch()
 train_generator = traingen.feedNumpyData()
 print("train_generator created")
 
-# load model
+# load model and set it to evaluation mode
 check = torch.load(modelDir+'/'+modelFile, map_location=torch.device('cpu'))
 model.load_state_dict(check['state_dict'])
 model.to(device)
 model.eval()
 
-# Processing the data in train_loop()
+# save inputs and outputs
 features_list, truth_list = next(train_generator)
 glob = torch.Tensor(features_list[0]).to(device)
 cpf = torch.Tensor(features_list[1]).to(device)
@@ -162,6 +166,52 @@ vtx = torch.Tensor(features_list[3]).to(device)
 y = torch.Tensor(truth_list[0]).to(device)
 pred = (model(glob,cpf,npf,vtx)).detach()
 save_features((glob,cpf,npf,vtx),y,pred,attack="nominal")
+
+'''
+# save all model inputs
+x_glob = glob.clone().detach()
+x_cpf = cpf.clone().detach()
+x_npf = npf.clone().detach()
+x_vtx = vtx.clone().detach()
+glob_array = x_glob.cpu().clone().detach().numpy()
+cpf_array = x_cpf.cpu().clone().detach().numpy()
+npf_array = x_npf.cpu().clone().detach().numpy()
+vtx_array = x_vtx.cpu().clone().detach().numpy()
+np.save('{}/variables/glob_array.npy'.format(modelDir), glob_array)
+np.save('{}/variables/cpf_array.npy'.format(modelDir), cpf_array)
+np.save('{}/variables/npf_array.npy'.format(modelDir), npf_array)
+np.save('{}/variables/vtx_array.npy'.format(modelDir), vtx_array)
+
+
+# save all model gradients
+model.train()
+x_glob = glob.clone().detach()
+x_cpf = cpf.clone().detach()
+x_npf = npf.clone().detach()
+x_vtx = vtx.clone().detach()
+x_glob.requires_grad = True
+x_cpf.requires_grad = True
+x_npf.requires_grad = True
+x_vtx.requires_grad = True
+pred = model(x_glob,x_cpf,x_npf,x_vtx)
+loss = cross_entropy_one_hot(pred, y)
+model.zero_grad()
+loss.backward()
+with torch.no_grad():
+    dx_glob = x_glob.grad.detach()
+    dx_cpf = x_cpf.grad.detach()
+    dx_npf = x_npf.grad.detach()
+    dx_vtx = x_vtx.grad.detach()
+glob_gradients = dx_glob.cpu().clone().detach().numpy()
+cpf_gradients = dx_cpf.cpu().clone().detach().numpy()
+npf_gradients = dx_npf.cpu().clone().detach().numpy()
+vtx_gradients = dx_vtx.cpu().clone().detach().numpy()
+np.save('{}/variables/glob_gradients.npy'.format(modelDir), glob_gradients)
+np.save('{}/variables/cpf_gradients.npy'.format(modelDir), cpf_gradients)
+np.save('{}/variables/npf_gradients.npy'.format(modelDir), npf_gradients)
+np.save('{}/variables/vtx_gradients.npy'.format(modelDir), vtx_gradients)
+model.eval()
+'''
 
 # load epsilon factors for adversarial attacks
 epsilon_factors = {
@@ -172,12 +222,29 @@ epsilon_factors = {
     }
 
 # FGSM epsilon=0.05
+model.train()
 x_glob, x_cpf, x_npf, x_vtx = fgsm_attack(sample=(glob,cpf,npf,vtx), epsilon=0.05, dev=device, targets=y, thismodel=model, thiscriterion=train.criterion, restrict_impact=0.2, epsilon_factors=epsilon_factors, allow_zeros=True)
+model.eval()
 pred = (model(x_glob,x_cpf,x_npf,x_vtx)).detach()
 save_features((x_glob,x_cpf,x_npf,x_vtx),y,pred,attack="fgsm-0_05")
 
 # FGSM epsilon=0.1
+model.train()
 x_glob, x_cpf, x_npf, x_vtx = fgsm_attack(sample=(glob,cpf,npf,vtx), epsilon=0.1, dev=device, targets=y, thismodel=model, thiscriterion=train.criterion, restrict_impact=0.2, epsilon_factors=epsilon_factors, allow_zeros=True)
+model.eval()
 pred = (model(x_glob,x_cpf,x_npf,x_vtx)).detach()
 save_features((x_glob,x_cpf,x_npf,x_vtx),y,pred,attack="fgsm-0_1")
-                                                                                   
+
+# Gaussian noise with epsilon=0.1
+model.train()
+x_glob, x_cpf, x_npf, x_vtx = gaussian_noise(sample=(glob,cpf,npf,vtx), epsilon=0.1, restrict_impact=-1, epsilon_factors=epsilon_factors)
+model.eval()
+pred = (model(x_glob,x_cpf,x_npf,x_vtx)).detach()
+save_features((x_glob,x_cpf,x_npf,x_vtx),y,pred,attack="gaussian-0_1")
+
+# Gaussian noise with epsilon=1
+model.train()
+x_glob, x_cpf, x_npf, x_vtx = gaussian_noise(sample=(glob,cpf,npf,vtx), epsilon=5, restrict_impact=-1, epsilon_factors=epsilon_factors)
+model.eval()
+pred = (model(x_glob,x_cpf,x_npf,x_vtx)).detach()
+save_features((x_glob,x_cpf,x_npf,x_vtx),y,pred,attack="gaussian-1")

@@ -1,6 +1,15 @@
 import torch
 import torch.nn as nn
 
+# set a manual seed
+seed = 0 # default: 0
+torch.manual_seed(seed)
+torch.random.manual_seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(seed)
+# use only deterministic algorithms
+#torch.use_deterministic_algorithms(True)
+
 class InputConv(nn.Module):
 
     def __init__(self, in_chn, out_chn, dropout_rate = 0.1, **kwargs):

@@ -10,8 +10,8 @@ import os
 
 print(f"This process has the PID {os.getpid()} .")
 
-models = ["nominal","fgsm-0_01","fgsm-0_05"]#[]
-attacks = ["nominal","fgsm-0_01","fgsm-0_02","fgsm-0_05","fgsm-0_1"]#"fgsm-0_005",,"fgsm-0_015","fgsm-0_02","fgsm--0_01"
+models = ['nominal','nominal_2','nominal_3','nominal_seed1','nominal_seed2']#,'fgsm-0_025','fgsm-0_05','fgsm-0_075','fgsm-0_1','fgsm-0_125','fgsm-0_15','fgsm-0_175','fgsm-0_2','fgsm-0_225','fgsm-0_25']#
+attacks = ['nominal','fgsm-0_1']#'gaussian-0_1','gaussian-1','gaussian-5']#'nominal','fgsm-0_025','fgsm-0_05','fgsm-0_075','fgsm-0_1','fgsm-0_125','fgsm-0_15','fgsm-0_175','fgsm-0_2','fgsm-0_225','fgsm-0_25'
 predictions = []
 for model in models:
     for attack in attacks:
@@ -34,7 +34,8 @@ def spit_out_roc(disc,truth_array,selection_array):
         return clean.tpr, clean.fpr, auc_ * np.ones(np.shape(clean.tpr))
 
 def save_roc(prediction_path):
-    base_dir         = "/net/scratch_cms3a/hschoenen/deepjet/results/"
+    #base_dir         = "/net/scratch_cms3a/hschoenen/deepjet/results/"
+    base_dir         = "/net/data_cms/institut_3a/hschoenen/models/"
     output_dirs      = [base_dir + f"{i}" for i in prediction_path]
     
     listbranch = ["prob_isB", "prob_isBB", "prob_isLeptB", "prob_isC", "prob_isUDS", "prob_isG", "isB", "isBB", "isLeptB", "isC", "isUDS", "isG", "jet_pt", "jet_eta"]
