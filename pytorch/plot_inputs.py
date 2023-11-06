@@ -12,8 +12,8 @@ variables = ['jet_pt', 'jet_eta', 'nCpfcand','nNpfcand', 'nsv','npv', 'TagVarCSV
              'sv_pt','sv_deltaR', 'sv_mass', 'sv_ntracks', 'sv_chi2', 'sv_normchi2', 'sv_dxy', 'sv_dxysig', 'sv_d3d', 'sv_d3dsig', 'sv_costhetasvpv', 'sv_enratio']
 
 # specify model
-model_name = 'seed_nominal'
-modelDir = '/net/scratch_cms3a/hschoenen/deepjet/results/' + model_name
+model_name = 'fgsm-0_1'
+modelDir = '/net/data_cms/institut_3a/hschoenen/models/' + model_name
 modelFile = 'checkpoint_best_loss.pth'
 # specify input file
 inputFile = '/net/scratch_cms3a/hschoenen/deepjet/data/testData/dataCollection.djcdc'
@@ -121,7 +121,7 @@ def save_features(inputs, targets, outputs, attack=""):
         print('{}/variables/{}/{}.npy saved'.format(modelDir,attack,target_name))
     # save predictions
     prediction_names = ['prob_isB','prob_isBB','prob_isLeptonicB','prob_isC','prob_isUDS','prob_isG']
-    softmax_outputs = pred = nn.Softmax(dim=1)(outputs).cpu().detach().numpy()
+    softmax_outputs = nn.Softmax(dim=1)(outputs).cpu().detach().numpy()
     for i,prediction_name in enumerate(prediction_names):
         variable_values = outputs[:,i].cpu().clone().detach().numpy()
         np.save('{}/variables/{}/{}.npy'.format(modelDir,attack,prediction_name), variable_values)
@@ -221,6 +221,7 @@ epsilon_factors = {
     'vtx' : torch.Tensor(np.load(epsilons_per_feature['vtx']).transpose()).to(device),
     }
 
+'''
 # FGSM epsilon=0.05
 model.train()
 x_glob, x_cpf, x_npf, x_vtx = fgsm_attack(sample=(glob,cpf,npf,vtx), epsilon=0.05, dev=device, targets=y, thismodel=model, thiscriterion=train.criterion, restrict_impact=0.2, epsilon_factors=epsilon_factors, allow_zeros=True)
@@ -237,10 +238,10 @@ save_features((x_glob,x_cpf,x_npf,x_vtx),y,pred,attack="fgsm-0_1")
 
 # Gaussian noise with epsilon=0.1
 model.train()
-x_glob, x_cpf, x_npf, x_vtx = gaussian_noise(sample=(glob,cpf,npf,vtx), epsilon=0.1, restrict_impact=-1, epsilon_factors=epsilon_factors)
+x_glob, x_cpf, x_npf, x_vtx = gaussian_noise(sample=(glob,cpf,npf,vtx), epsilon=1, restrict_impact=-1, epsilon_factors=epsilon_factors)
 model.eval()
 pred = (model(x_glob,x_cpf,x_npf,x_vtx)).detach()
-save_features((x_glob,x_cpf,x_npf,x_vtx),y,pred,attack="gaussian-0_1")
+save_features((x_glob,x_cpf,x_npf,x_vtx),y,pred,attack="gaussian-1")
 
 # Gaussian noise with epsilon=1
 model.train()
@@ -248,3 +249,4 @@ x_glob, x_cpf, x_npf, x_vtx = gaussian_noise(sample=(glob,cpf,npf,vtx), epsilon=
 model.eval()
 pred = (model(x_glob,x_cpf,x_npf,x_vtx)).detach()
 save_features((x_glob,x_cpf,x_npf,x_vtx),y,pred,attack="gaussian-1")
+'''

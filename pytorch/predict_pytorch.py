@@ -40,6 +40,8 @@ elif attack=="FGSM_flavour":
     att_magnitude = args.att_magnitude_flavour
 elif attack=="FGSM_domain":
     att_magnitude = args.att_magnitude_domain
+elif attack=="Gaussian":
+    att_magnitude = float(args.att_magnitude)
 else:
     att_magnitude=0
 restrict_impact = float(args.restrict_impact)
@@ -59,7 +61,7 @@ from pytorch_deepjet_run2 import DeepJet_Run2
 from pytorch_deepjet_transformer import DeepJetTransformer
 from torch.optim import Adam, SGD
 from tqdm import tqdm
-from attacks import apply_noise, fgsm_attack, fgsm_attack_flavour, fgsm_attack_domain
+from attacks import apply_noise, fgsm_attack, fgsm_attack_flavour, fgsm_attack_domain, gaussian_noise
 from definitions import epsilons_per_feature, vars_per_candidate
 
 glob_vars = vars_per_candidate['glob']
@@ -140,6 +142,12 @@ def test_loop(dataloader, model, nbatches, pbar, attack = "", att_magnitude = -1
                                                       restrict_impact=restrict_impact,
                                                       epsilon_factors=epsilon_factors)
 
+        elif attack == 'Gaussian':
+            glob, cpf, npf, vtx = gaussian_noise(sample=(glob,cpf,npf,vtx), 
+                                                 epsilon=att_magnitude,
+                                                 restrict_impact=restrict_impact,
+                                                 epsilon_factors=epsilon_factors)
+            
         # Compute prediction
         pred = nn.Softmax(dim=1)(model(glob,cpf,npf,vtx)).cpu().detach().numpy()
         if b == 0:
